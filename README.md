@@ -78,6 +78,7 @@ Versions:
   - 0.9   : Initial version
   - 0.9.1 : Updated readme, added GNU license text
   - 0.9.2 : readme info fed back to sourcecode
+  - 0.9.3 : Remove unnecessary "secret inverter code"
 
 
 

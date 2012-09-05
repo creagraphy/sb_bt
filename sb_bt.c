@@ -45,6 +45,7 @@ Versions:
   - 0.9   : Initial version
   - 0.9.1 : Updated readme, added GNU license text
   - 0.9.2 : readme info fed back to sourcecode
+  - 0.9.3 : Remove unnecessary "secret inverter code"
 
 
 Limitations: 
@@ -274,7 +275,6 @@ unsigned int fcstab[256] = {
 unsigned char fourzeros[]           = { 0, 0, 0, 0 };
 unsigned char long_one[]            = { 0x01, 0x00, 0x00, 0x00 };
 unsigned char sixff[]               = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
-unsigned char InverterCodeArray[]   = { 0x78, 0x00, 0x72, 0x84, 0x81, 0x37 };  /* Secret code for setting time, */
 
 unsigned char smanet2dataheader[]   = { 0xff, 0x03, 0x60, 0x65 };
 unsigned char smanet2init1[]        = { 0x00, 0x04, 0x70, 0x00 };
@@ -604,7 +604,6 @@ It is not necessary for the functionality of this software, hence we don'nt use 
 int handle_set_time(void) {
     unsigned char *p = comms.snd_buf;
     int           i, len, bytes_read, cmd, logon_failed, size=sizeof(comms.snd_buf);
-    char          code;
     unsigned char *payload;
     time_t        cur_time;
     struct tm     *tm_time;
@@ -1107,7 +1106,8 @@ int build_data_packet(unsigned char *buf, int size, unsigned char c1, unsigned c
     p += len; size -= len;
     len = pack_smanet2_data(p, size, &b, 1);
     p += len; size -= len;
-    len = pack_smanet2_data(p, size, InverterCodeArray, sizeof(InverterCodeArray));
+    /* Some software uses a "unknown secret inverter code", but six ff bytes works too */
+    len = pack_smanet2_data(p, size, sixff, sizeof(sixff));
     p += len; size -= len;
     len = pack_smanet2_data(p, size, fourzeros, 1);    /* only need one 0x0, but must be in checksum */
     p += len; size -= len;

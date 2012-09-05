@@ -23,7 +23,7 @@ Tested with a SMA SunnyBoy 2100TL, but expected to work with all SunnyBoy invert
 Usage:
 ------
 
-See for installation instructions: https://github.com/creagraphy/sb_bt/wiki/Installation
+See for installation instructions: https://github.com/creagraphy/sb_bt/wiki/How-to-install
 
 I use this software by calling it from Cron, every 5 minutes.  
 I use a separate script to upload The resulting CSV file to my webserver, that will add the data to a Mysql DB.  

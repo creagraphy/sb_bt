@@ -56,7 +56,7 @@ Limitations:
 
 Technical notes:
 ----------------
-  - I have put a lot of effort in understanding the communications protocol, and detect CRC errors in the responses of the Sunnyboy
+  - I have put a lot of effort in understanding the communications protocol, and detect CRC errors in messages from the Sunnyboy
     Therefore the BT communications is very reliable, chances of reading wrong values are very small.
   - I have chosen to communicate with small messages, rather than reading lots of data at once.
     This makes the communications more reliable too.

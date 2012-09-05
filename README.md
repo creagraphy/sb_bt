@@ -1,20 +1,20 @@
 sb_bt
 =====
-Tool to read power production data for SMA Sunnyboy power invertors on a Linux machine.
+Tool to read power production data for SMA Sunnyboy power invertors on a Linux machine.  
 Copyright 2012, Creagraphy / Ernst de Moor.
 
 
 SunnyBoy Bluetooth communications. Reads actual values in a reliable way, and adds them to a CSV file.
 
-This software is to be called from a Cron job, e.g. every 5 minutes.
+This software is to be called from a Cron job, e.g. every 5 minutes.  
 It will add the current values to a .csv file, with the date as part of the filename.
 
-Examples of filesnames that are created:
+Examples of filesnames that are created:  
  - test2012-09-05.csv (with -f option of -f test )
  - /tmp/pv-2-2012-09-05.csv (with -f option of -f /tmp/pv-2- )
 
 
-Optionally this program will set the internal clock of the SunnyBoy, either once a day or every 5 minutes.
+Optionally this program will set the internal clock of the SunnyBoy, either once a day or every 5 minutes.  
 This is not necessary for this tool, but might be useful to read the graphs lateron with SunnyExplorer.
 
 Tested with a SMA SunnyBoy 2100TL, but expected to be used with all SunnyBoy inverters with a piggyback Bluetooth module.
@@ -23,16 +23,16 @@ Tested with a SMA SunnyBoy 2100TL, but expected to be used with all SunnyBoy inv
 Usage:
 ------
 
-I use this software by calling it from Cron, every 5 minutes.
-I use a separate script to upload The resulting CSV file to my webserver, that will add the data to a Mysql DB.
+I use this software by calling it from Cron, every 5 minutes.  
+I use a separate script to upload The resulting CSV file to my webserver, that will add the data to a Mysql DB.  
 This is done by the upload.sh script (see below), which is so specific for my use that I decided not to add it to this repo.
 
 To see the resulting graphs: http://www.web-op-maat.nl/grafieken (Dutch page)
 
 Add in /etc/crontab:
 
-# Read Sunnyboy values every 5 minute
-*/5 * * * *   root  /etc/cron.watches/sb_bt -t 1 -a 00:80:25:A4:B6:C2 -p xxxx ; /etc/cron.watches/upload.sh
+\# Read Sunnyboy values every 5 minute
+\*/5 * * * *   root  /etc/cron.watches/sb_bt -t 1 -a 00:80:25:A4:B6:C2 -p xxxx ; /etc/cron.watches/upload.sh
 
 
 
@@ -40,9 +40,9 @@ Add in /etc/crontab:
 
 Commandline options:
 --------------------
-Usage: sb_bt [OPTION]...
-Read information from SunnyBoy inverter via BlueTooth
-Optionally set the internal clock (not necessary for us, but for SMA Sunny Explorer
+Usage: sb_bt [OPTION]...  
+Read information from SunnyBoy inverter via BlueTooth  
+Optionally set the internal clock (not necessary for us, but for SMA Sunny Explorer)
 
 Mandatory arguments:
   - -a ADDRESS        : Bluetooth address of the inverter
@@ -66,7 +66,8 @@ Files in this repository:
   - sb_bt.c   : The source code
   - gpl.txt   : The GNU license
 
-How to compile: gcc -lbluetooth -lm -o sb_bt sb_bt.c
+How to compile:  
+gcc -lbluetooth -lm -o sb_bt sb_bt.c
 
 
 
@@ -94,7 +95,7 @@ Limitations:
 
 Technical notes:
 ----------------
-  - I have put a lot of effort in understanding the communications protocol, and detect CRC errors in the responses of the Sunnyboy
+  - I have put a lot of effort in understanding the communications protocol, and detect CRC errors in messages from the Sunnyboy.
     Therefore the BT communications is very reliable, chances of reading wrong values are very small.
   - I have chosen to communicate with small messages, rather than reading lots of data at once.
     This makes the communications more reliable too.

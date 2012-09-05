@@ -1,7 +1,7 @@
 sb_bt
 =====
-Tool to read power production data for SMA Sunnyboy power invertors 
-Copyright 2012, Creagraphy / Ernst de Moor
+Tool to read power production data for SMA Sunnyboy power invertors.
+Copyright 2012, Creagraphy / Ernst de Moor.
 
 
 SunnyBoy Bluetooth communications. Reads actual values in a reliable way, and adds them to a CSV file.
@@ -21,15 +21,15 @@ Read information from SunnyBoy inverter via BlueTooth
 Optionally set the internal clock (not necessary for us, but for SMA Sunny Explorer
 
 Mandatory arguments:
-  -a ADDRESS        : Bluetooth address of the inverter
-  -p PASSWORD       : User level password of the inverter (default: 0000)
+  - -a ADDRESS        : Bluetooth address of the inverter
+  - -p PASSWORD       : User level password of the inverter (default: 0000)
 
 Optional arguments
-  -f FILENAME       : Output filename lead-in (date and csv extension is added, default: /tmp/pv-2- )
-  -t SETTIME        : Set the time of the converter, 1: Once a day, 2: every request
-  -v                : verbose. if off, the application is silent for cron
-  -d LEVEL          : activate debug, 1: status info, 2: additional hexdumps, 3: additional translations
-  -h                : this help info
+  - -f FILENAME       : Output filename lead-in (date and csv extension is added, default: /tmp/pv-2- )
+  - -t SETTIME        : Set the time of the converter, 1: Once a day, 2: every request
+  - -v                : verbose. if off, the application is silent for cron
+  - -d LEVEL          : activate debug, 1: status info, 2: additional hexdumps, 3: additional translations
+  - -h                : this help info
 
 
 
@@ -38,6 +38,7 @@ Files in this repository:
   - README.md : This readme file
   - sb_bt     : A pre-compiled unix executable
   - sb_bt.c   : The source code
+  - gpl.txt   : The GNU license
 
 How to compile: gcc -lbluetooth -lm -o sb_bt sb_bt.c
 
@@ -53,7 +54,7 @@ Versions:
 
 Limitations: 
 ------------
-  - A Little-Endian processor is assumed, because data structure are built directly in memory (using structs)
+  - A Little-Endian processor is assumed, because data structure are built directly in memory (using structs).
      Don't worry, most Linux machines are Little Endian, at least the Intel and ARM processors.
   - Probably only works with SunnyBoy inverters with a piggyback BlueTooth module, not with the newer ones with built-in BT.
 
@@ -74,6 +75,7 @@ Technical notes:
       - The config structure contains settings from the commandline.
       - The comms structure holds communications settings like addresses, and the send/receive buffers.
       - The results structure contains the results of querying the Sunnyboys, values for Watt etc.
+
     making these structures global, keeps the software fast and easy to understand.
     Note however that the functions are _NOT_ re-entrent because of this.
     So if you want to use these functions in a multithreading program, or if you want to write a program 
@@ -92,7 +94,8 @@ Thanks to the following sources for showing the structuring of data:
 
 
 
-
+GNU license
+-----------
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
@@ -104,4 +107,4 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>. */
+along with this program.  If not, see <http://www.gnu.org/licenses/>.

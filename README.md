@@ -10,28 +10,30 @@ This software is to be called from a Cron job, e.g. every 5 minutes.
 It will add the current values to a .csv file, with the date as part of the filename.
 
 Examples of filesnames that are created:  
- - test2012-09-05.csv (with -f option of -f test )
- - /tmp/pv-2-2012-09-05.csv (with -f option of -f /tmp/pv-2- )
+ - test2012-09-05.csv (with option -f test )
+ - /tmp/pv-2-2012-09-05.csv (with option -f /tmp/pv-2- )
 
 
 Optionally this program will set the internal clock of the SunnyBoy, either once a day or every 5 minutes.  
 This is not necessary for this tool, but might be useful to read the graphs lateron with SunnyExplorer.
 
-Tested with a SMA SunnyBoy 2100TL, but expected to be used with all SunnyBoy inverters with a piggyback Bluetooth module.
+Tested with a SMA SunnyBoy 2100TL, but expected to work with all SunnyBoy inverters with a piggyback Bluetooth module.
 
 
 Usage:
 ------
 
+See for installation instructions: https://github.com/creagraphy/sb_bt/wiki/Installation
+
 I use this software by calling it from Cron, every 5 minutes.  
 I use a separate script to upload The resulting CSV file to my webserver, that will add the data to a Mysql DB.  
-This is done by the upload.sh script (see below), which is so specific for my use that I decided not to add it to this repo.
+This is done by the upload.sh script (see below), which is too specific to add it to this repo.
 
 To see the resulting graphs: http://www.web-op-maat.nl/grafieken (Dutch page)
 
 Add in /etc/crontab:
 
-\# Read Sunnyboy values every 5 minute
+\# Read Sunnyboy values every 5 minute  
 \*/5 * * * *   root  /etc/cron.watches/sb_bt -t 1 -a 00:80:25:A4:B6:C2 -p xxxx ; /etc/cron.watches/upload.sh
 
 
@@ -51,7 +53,7 @@ Mandatory arguments:
 Optional arguments
   - -f FILENAME       : Output filename lead-in (date and csv extension is added, default: /tmp/pv-2- )
   - -t SETTIME        : Set the time of the converter, 1: Once a day, 2: every request
-  - -v                : verbose. if off, the application is silent for cron
+  - -v                : verbose. If off, the application is silent for cron
   - -d LEVEL          : activate debug, 1: status info, 2: additional hexdumps, 3: additional translations
   - -h                : this help info
 
@@ -79,6 +81,7 @@ Versions:
   - 0.9.1 : Updated readme, added GNU license text
   - 0.9.2 : readme info fed back to sourcecode
   - 0.9.3 : Remove unnecessary "secret inverter code"
+  - 0.9.4 : Some improvements in the Readme file
 
 
 
@@ -120,7 +123,7 @@ Technical notes:
 Special thanks:
 ---------------
 Thanks to the following sources for showing the structuring of data:
-  - Yasdi tool of SMA themselves
+  - Yasdi tool of SMA themselves (Serial version of the protocol)
   - Dean Fogarty : https://github.com/angrytongan/dfinvrelay/
   - Wim Hofman and Stephen Collier : http://code.google.com/p/sma-bluetooth/
 

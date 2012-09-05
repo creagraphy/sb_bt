@@ -46,6 +46,7 @@ Versions:
   - 0.9.1 : Updated readme, added GNU license text
   - 0.9.2 : readme info fed back to sourcecode
   - 0.9.3 : Remove unnecessary "secret inverter code"
+  - 0.9.4 : Some improvements in the Readme file
 
 
 Limitations: 
@@ -289,12 +290,6 @@ unsigned char smanet2pvVolt[]       = { 0x80, 0x00, 0x02, 0x80, 0x63, 0x00, 0x1F
 unsigned char smanet2pvAmpere[]     = { 0x80, 0x00, 0x02, 0x80, 0x63, 0x00, 0x21, 0x45, 0x00, 0xff, 0x21, 0x45, 0x00 };
 unsigned char smanet2set_time[]     = { 0x80, 0x0a, 0x02, 0x00, 0xf0, 0x00, 0x6d, 0x23, 0x00, 0x00, 0x6d, 0x23, 0x00, 0x00, 0x6d, 0x23, 0x00 };
 unsigned char smanet2set_time2[]    = { 0x30,0xfe,0x7e,0x00 };
-
-
-// 80 0a 02 00 f0 00 6d 23 00 00 6d 23 00 00 6d 23 00
-// 76 18 43 50 76 18 43 50 76 18 43 50 7d 31 0e 00 00
-// 30 fe 7d 5e 00
-// 01 00 00 00 d3 a9 7e
 
 
 

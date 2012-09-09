@@ -47,6 +47,7 @@ Versions:
   - 0.9.2 : readme info fed back to sourcecode
   - 0.9.3 : Remove unnecessary "secret inverter code"
   - 0.9.4 : Some improvements in the Readme file
+  - 0.9.5 : Recognise if the SunnyBoy returns a status message instead of data, and retry (better implementation)
 
 
 Limitations: 

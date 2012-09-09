@@ -62,9 +62,6 @@ Technical notes:
     Therefore the BT communications is very reliable, chances of reading wrong values are very small.
   - I have chosen to communicate with small messages, rather than reading lots of data at once.
     This makes the communications more reliable too.
-  - The structure of this code is reasonable, but could be optimised. 
-    For instance I could have made a single function to send data and wait for the answer.
-    This is now implemented at multiple places.
   - This software uses global data, as it has a very specific use.
       - The config structure contains settings from the commandline.
       - The comms structure holds communications settings like addresses, and the send/receive buffers.
@@ -83,6 +80,16 @@ Thanks to the following sources for showing the structuring of data:
   - Dean Fogarty : https://github.com/angrytongan/dfinvrelay/
   - Wim Hofman and Stephen Collier : http://code.google.com/p/sma-bluetooth/
 
+Data package structure (example Wh data request):
+-------------------------------------------------
+00000000:  7e 3e 00 40 14 95 69 3a 00 00 c2 b6 a4 25 80 00
+      Sync, Len2, Len1, Chksum, src_addr(6b), dest_addr(6b)
+00000010:  01 00 7e ff 03 60 65 09 a0 ff ff ff ff ff ff 00
+      Cmd2, Cmd1, Sync, dataheader (4b), C1, C2, ff (6x), A
+00000020:  00 ff ff ff ff ff ff 00 00 00 00 00 00 01 80 00
+      B, unknown (=6xff), 00 (4x), C, 00(4x), Counter, Rq1, Rq2
+00000030:  02 00 54 00 01 26 00 ff 01 26 00 4b 82 7e
+      Rq3-Rq13, Chksum1, Chksum2, Sync
 
 GNU license
 -----------
@@ -123,10 +130,10 @@ unsigned char *check_header(unsigned char *buf, int len);
 unsigned int get_header_cmd(unsigned char *buf, int len);
 int create_header(int cmd, unsigned char *buf, int size);
 int write_bt(unsigned char *buf, int msg_size);
-int dump_hex(char *logstr, unsigned char *buf, int length);
+int dump_hex(char *logstr, unsigned char *buf, int length, int force);
 char *get_device_name(char *name, int name_size);
 int send_packet(unsigned char *buf, int len);
-int read_packet(unsigned char *buf, int buf_size);
+int read_packet();
 int pack_smanet2_data(unsigned char *buf, int size, unsigned char *src, unsigned int num);
 int handle_init_1(void);
 int handle_get_signal_strength(void);
@@ -138,6 +145,7 @@ int handle_pv_volt(void);
 int handle_pv_amp(void);
 int handle_logon(void);
 int handle_set_time(void);
+char *retry_send_receive(int bytes_send, char *log_str);
 int build_data_packet(unsigned char *buf, int size, unsigned char c1, unsigned char c2,
                       unsigned char a, unsigned char b, unsigned char c);
 int add_fcs_checksum(unsigned char *buf, int size);
@@ -166,7 +174,7 @@ char *help = "\
 #pragma pack (push)       /* Push current alignment to compiler stack */
 #pragma pack (1)          /* Force byte padding (instead of word or long padding */
 typedef struct {
-  unsigned char  som;
+  unsigned char  sync;
   unsigned short len;
   unsigned char  chksum;
   bdaddr_t       src_addr;
@@ -196,6 +204,9 @@ struct {
     unsigned char packet_send_counter;   /* Keeps track of the amount of data packages sent */
     unsigned char snd_buf[1024];
     unsigned char rcv_buf[1024];
+/* TEMPORARY */
+unsigned char rawrcv_buf[1024];
+unsigned int rawrcv_buf_size;
 } comms = { 0, {0}, {0}, 1, 0, 0xffff, 0, {0}, {0} };
 
 /* Local storage for Sunnyboy output */
@@ -249,6 +260,7 @@ unsigned int fcstab[256] = {
 /* Definitions for building packages */
 #define HDLC_SYNC           0x7e    /* Sync character, denotes start of message and surrounds data */
 #define HDLC_ESC            0x7d    /* Escape character, indicates modification of next byte */
+#define DATA_CHK            0xa0    /* It seems that this byte at position 32 indicates valid data */
 
 /* Packet header offsets */
 #define PKT_OFF_LEN1        1
@@ -268,6 +280,7 @@ unsigned int fcstab[256] = {
 /* Data indexes */
 #define IDX_NETID            4
 #define IDX_LOGONFAIL       24
+#define IDX_DATA_CHK        14  /* It seems this always contains xa0 with a valid data package */
 #define IDX_BT_SIGNAL        4
 #define IDX_DATETIME        45
 #define IDX_VALUE           49
@@ -664,7 +677,7 @@ returns: pointer directly after the copied bytes
 *******************************************/
 int  handle_total_wh(void) {
     unsigned char *p = comms.snd_buf;
-    int           i, len, bytes_read, cmd, fcs_retry=4, size=sizeof(comms.snd_buf);
+    int           len, size=sizeof(comms.snd_buf);
     unsigned char *payload;
     struct tm     *tm_time;
 
@@ -678,34 +691,22 @@ int  handle_total_wh(void) {
     p += len; size -= len;
     len = add_fcs_checksum(p, size);
     p += len; size -= len;
-    while(fcs_retry--) {
-        if(send_packet(comms.snd_buf, p - comms.snd_buf)) {
-            /* Wait for the correct answer */
-            while(bytes_read = read_packet(comms.rcv_buf, sizeof(comms.rcv_buf))) {
-                if(bytes_read < 0)  /* Data error, checksum or missing som, force a retry */
-                  break;
-                payload = check_header(comms.rcv_buf, bytes_read);
-                cmd = get_header_cmd(comms.rcv_buf, bytes_read);
-                if(cmd == CMD_DATA) {
-                    /* Succesfully received a message, no retry necessary */
-                    fcs_retry = 0;
-                    break;
-                }
-            }
-        }
-        else {
-            if (config.verbose)
-                printf("Could not send data of handle_total_wh\n");
-            return -1;
-        }
-    }
-    if (cmd != CMD_DATA) {
-        printf("No valid response from handle_total_wh\n");
-        return -1;
-    }
-    /* get the Wh from this message */
+    payload = retry_send_receive(p-comms.snd_buf, "handle_total_wh");
+    if(!payload)
+      return -1;
+    /* get the WattHour from this message */
     memcpy(&results.datetime, &payload[IDX_DATETIME], 4);
     memcpy(&results.Wh, &payload[IDX_VALUE], 3);
+// TEMPORARY!!! Debug info
+if(results.Wh < 0 || results.Wh > 1000000) {  /* More than 1000 kWh is not realistic, currently */
+  printf(" Foute waarde voor Wh: %d\n",results.Wh);
+  tm_time = localtime(&results.datetime);
+  printf("gelezen datetime: %04d-%02d-%02d %02d:%02d:%02d (%x)\n",1900+tm_time->tm_year, tm_time->tm_mon,
+  tm_time->tm_mday, tm_time->tm_hour, tm_time->tm_min, tm_time->tm_sec, results.datetime);
+  dump_hex("Sent package", comms.snd_buf, p - comms.snd_buf, 1);
+  dump_hex("Received package", comms.rawrcv_buf, comms.rawrcv_buf_size, 1);
+  return -1;
+}
     if(config.debug) {
       printf("Total Wh: %lu ( %x )\n",results.Wh, results.Wh);
       tm_time = localtime(&results.datetime);
@@ -723,7 +724,7 @@ returns: pointer directly after the copied bytes
 *******************************************/
 int  handle_cur_w(void) {
     unsigned char *p = comms.snd_buf;
-    int           i, len, bytes_read, cmd, fcs_retry=4, size=sizeof(comms.snd_buf);
+    int           len, size=sizeof(comms.snd_buf);
     unsigned char *payload;
     struct tm     *tm_time;
 
@@ -737,34 +738,22 @@ int  handle_cur_w(void) {
     p += len; size -= len;
     len = add_fcs_checksum(p, size);
     p += len; size -= len;
-    while(fcs_retry--) {
-        if(send_packet(comms.snd_buf, p - comms.snd_buf)) {
-            /* Wait for the correct answer */
-            while(bytes_read = read_packet(comms.rcv_buf, sizeof(comms.rcv_buf))) {
-                if(bytes_read < 0)  /* Data error, checksum or missing som, force a retry */
-                  break;
-                payload = check_header(comms.rcv_buf, bytes_read);
-                cmd = get_header_cmd(comms.rcv_buf, bytes_read);
-                if(cmd == CMD_DATA) {
-                    /* Succesfully received a message, no retry necessary */
-                    fcs_retry = 0;
-                    break;
-                }
-            }
-        }
-        else {
-            if (config.verbose)
-                printf("Could not send data of handle_cur_w\n");
-            return -1;
-        }
-    }
-    if (cmd != CMD_DATA) {
-        printf("No valid response from handle_cur_w\n");
-        return -1;
-    }
-    /* get the W from this message */
+    payload = retry_send_receive(p-comms.snd_buf, "handle_cur_w");
+    if(!payload)
+      return -1;
+    /* get the Watt from this message */
     memcpy(&results.datetime, &payload[IDX_DATETIME], 4);
     memcpy(&results.W, &payload[IDX_VALUE], 3);
+// TEMPORARY!!! Debug info
+if(results.W < 0 || results.W > 10000) {  /* More than 10 kW is not realistic currently */
+  printf(" Foute waarde voor W: %d\n",results.Wh);
+  tm_time = localtime(&results.datetime);
+  printf("gelezen datetime: %04d-%02d-%02d %02d:%02d:%02d (%x)\n",1900+tm_time->tm_year, tm_time->tm_mon,
+  tm_time->tm_mday, tm_time->tm_hour, tm_time->tm_min, tm_time->tm_sec, results.datetime);
+  dump_hex("Sent package", comms.snd_buf, p - comms.snd_buf, 1);
+  dump_hex("Received package", comms.rawrcv_buf, comms.rawrcv_buf_size, 1);
+  return -1;
+}
     if(config.debug) {
       printf("Current Watt: %lu ( %x )\n",results.W, results.W);
       tm_time = localtime(&results.datetime);
@@ -782,7 +771,7 @@ returns: pointer directly after the copied bytes
 *******************************************/
 int  handle_net_voltage(void) {
     unsigned char *p = comms.snd_buf;
-    int           i, len, bytes_read, cmd, fcs_retry=4, size=sizeof(comms.snd_buf);
+    int           len, size=sizeof(comms.snd_buf);
     unsigned char *payload;
     struct tm     *tm_time;
 
@@ -796,32 +785,10 @@ int  handle_net_voltage(void) {
     p += len; size -= len;
     len = add_fcs_checksum(p, size);
     p += len; size -= len;
-    while(fcs_retry--) {
-        if(send_packet(comms.snd_buf, p - comms.snd_buf)) {
-            /* Wait for the correct answer */
-            while(bytes_read = read_packet(comms.rcv_buf, sizeof(comms.rcv_buf))) {
-                if(bytes_read < 0)  /* Data error, checksum or missing som, force a retry */
-                  break;
-                payload = check_header(comms.rcv_buf, bytes_read);
-                cmd = get_header_cmd(comms.rcv_buf, bytes_read);
-                if(cmd == CMD_DATA) {
-                    /* Succesfully received a message, no retry necessary */
-                    fcs_retry = 0;
-                    break;
-                }
-            }
-        }
-        else {
-            if (config.verbose)
-                printf("Could not send data of handle_net_voltage\n");
-            return -1;
-        }
-    }
-    if (cmd != CMD_DATA) {
-        printf("No valid response from handle_net_voltage\n");
-        return -1;
-    }
-    /* get the W from this message */
+    payload = retry_send_receive(p-comms.snd_buf, "handle_net_voltage");
+    if(!payload)
+      return -1;
+    /* get the Volt from this message */
     memcpy(&results.datetime, &payload[IDX_DATETIME], 4);
     memcpy(&results.netVolt, &payload[IDX_VALUE], 3);
     if(config.debug) {
@@ -841,7 +808,7 @@ returns: pointer directly after the copied bytes
 *******************************************/
 int  handle_net_amp(void) {
     unsigned char *p = comms.snd_buf;
-    int           i, len, bytes_read, cmd, fcs_retry=4, size=sizeof(comms.snd_buf);
+    int           len, size=sizeof(comms.snd_buf);
     unsigned char *payload;
     struct tm     *tm_time;
 
@@ -855,32 +822,10 @@ int  handle_net_amp(void) {
     p += len; size -= len;
     len = add_fcs_checksum(p, size);
     p += len; size -= len;
-    while(fcs_retry--) {
-        if(send_packet(comms.snd_buf, p - comms.snd_buf)) {
-            /* Wait for the correct answer */
-            while(bytes_read = read_packet(comms.rcv_buf, sizeof(comms.rcv_buf))) {
-                if(bytes_read < 0)  /* Data error, checksum or missing som, force a retry */
-                  break;
-                payload = check_header(comms.rcv_buf, bytes_read);
-                cmd = get_header_cmd(comms.rcv_buf, bytes_read);
-                if(cmd == CMD_DATA) {
-                    /* Succesfully received a message, no retry necessary */
-                    fcs_retry = 0;
-                    break;
-                }
-            }
-        }
-        else {
-            if (config.verbose)
-                printf("Could not send data of handle_net_amp\n");
-            return -1;
-        }
-    }
-    if (cmd != CMD_DATA) {
-        printf("No valid response from handle_net_amp\n");
-        return -1;
-    }
-    /* get the W from this message */
+    payload = retry_send_receive(p-comms.snd_buf, "handle_net_amp");
+    if(!payload)
+      return -1;
+    /* get the Ampere from this message */
     memcpy(&results.datetime, &payload[IDX_DATETIME], 4);
     memcpy(&results.netAmpere, &payload[IDX_VALUE], 3);
     if(config.debug) {
@@ -900,7 +845,7 @@ returns: pointer directly after the copied bytes
 *******************************************/
 int  handle_net_freq(void) {
     unsigned char *p = comms.snd_buf;
-    int           i, len, bytes_read, cmd, fcs_retry=4, size=sizeof(comms.snd_buf);
+    int           len, size=sizeof(comms.snd_buf);
     unsigned char *payload;
     struct tm     *tm_time;
 
@@ -914,32 +859,10 @@ int  handle_net_freq(void) {
     p += len; size -= len;
     len = add_fcs_checksum(p, size);
     p += len; size -= len;
-    while(fcs_retry--) {
-        if(send_packet(comms.snd_buf, p - comms.snd_buf)) {
-            /* Wait for the correct answer */
-            while(bytes_read = read_packet(comms.rcv_buf, sizeof(comms.rcv_buf))) {
-                if(bytes_read < 0)  /* Data error, checksum or missing som, force a retry */
-                  break;
-                payload = check_header(comms.rcv_buf, bytes_read);
-                cmd = get_header_cmd(comms.rcv_buf, bytes_read);
-                if(cmd == CMD_DATA) {
-                    /* Succesfully received a message, no retry necessary */
-                    fcs_retry = 0;
-                    break;
-                }
-            }
-        }
-        else {
-            if (config.verbose)
-                printf("Could not send data of handle_net_freq\n");
-            return -1;
-        }
-    }
-    if (cmd != CMD_DATA) {
-        printf("No valid response from handle_net_freq\n");
-        return -1;
-    }
-    /* get the W from this message */
+    payload = retry_send_receive(p-comms.snd_buf, "handle_net_freq");
+    if(!payload)
+      return -1;
+    /* get the Freq from this message */
     memcpy(&results.datetime, &payload[IDX_DATETIME], 4);
     memcpy(&results.netFreq, &payload[IDX_VALUE], 3);
     if(config.debug) {
@@ -959,7 +882,7 @@ returns: pointer directly after the copied bytes
 *******************************************/
 int  handle_pv_volt(void) {
     unsigned char *p = comms.snd_buf;
-    int           i, len, bytes_read, cmd, fcs_retry=4, size=sizeof(comms.snd_buf);
+    int           len, size=sizeof(comms.snd_buf);
     unsigned char *payload;
     struct tm     *tm_time;
 
@@ -973,32 +896,10 @@ int  handle_pv_volt(void) {
     p += len; size -= len;
     len = add_fcs_checksum(p, size);
     p += len; size -= len;
-    while(fcs_retry--) {
-        if(send_packet(comms.snd_buf, p - comms.snd_buf)) {
-            /* Wait for the correct answer */
-            while(bytes_read = read_packet(comms.rcv_buf, sizeof(comms.rcv_buf))) {
-                if(bytes_read < 0)  /* Data error, checksum or missing som, force a retry */
-                  break;
-                payload = check_header(comms.rcv_buf, bytes_read);
-                cmd = get_header_cmd(comms.rcv_buf, bytes_read);
-                if(cmd == CMD_DATA) {
-                    /* Succesfully received a message, no retry necessary */
-                    fcs_retry = 0;
-                    break;
-                }
-            }
-        }
-        else {
-            if (config.verbose)
-                printf("Could not send data of handle_pv_volt\n");
-            return -1;
-        }
-    }
-    if (cmd != CMD_DATA) {
-        printf("No valid response from handle_pv_volt\n");
-        return -1;
-    }
-    /* get the W from this message */
+    payload = retry_send_receive(p-comms.snd_buf, "handle_pv_volt");
+    if(!payload)
+      return -1;
+    /* get the Volt from this message */
     memcpy(&results.datetime, &payload[IDX_DATETIME], 4);
     memcpy(&results.pvVolt, &payload[IDX_VALUE], 3);
     if(config.debug) {
@@ -1018,7 +919,7 @@ returns: pointer directly after the copied bytes
 *******************************************/
 int  handle_pv_amp(void) {
     unsigned char *p = comms.snd_buf;
-    int           i, len, bytes_read, cmd, fcs_retry=4, size=sizeof(comms.snd_buf);
+    int           len, size=sizeof(comms.snd_buf);
     unsigned char *payload;
     struct tm     *tm_time;
 
@@ -1032,32 +933,10 @@ int  handle_pv_amp(void) {
     p += len; size -= len;
     len = add_fcs_checksum(p, size);
     p += len; size -= len;
-    while(fcs_retry--) {
-        if(send_packet(comms.snd_buf, p - comms.snd_buf)) {
-            /* Wait for the correct answer */
-            while(bytes_read = read_packet(comms.rcv_buf, sizeof(comms.rcv_buf))) {
-                if(bytes_read < 0)  /* Data error, checksum or missing som, force a retry */
-                  break;
-                payload = check_header(comms.rcv_buf, bytes_read);
-                cmd = get_header_cmd(comms.rcv_buf, bytes_read);
-                if(cmd == CMD_DATA) {
-                    /* Succesfully received a message, no retry necessary */
-                    fcs_retry = 0;
-                    break;
-                }
-            }
-        }
-        else {
-            if (config.verbose)
-                printf("Could not send data of handle_pv_amp\n");
-            return -1;
-        }
-    }
-    if (cmd != CMD_DATA) {
-        printf("No valid response from handle_pv_amp\n");
-        return -1;
-    }
-    /* get the W from this message */
+    payload = retry_send_receive(p-comms.snd_buf, "handle_pv_amp");
+    if(!payload)
+      return -1;
+    /* get the Ampere from this message */
     memcpy(&results.datetime, &payload[IDX_DATETIME], 4);
     memcpy(&results.pvAmpere, &payload[IDX_VALUE], 3);
     if(config.debug) {
@@ -1068,6 +947,45 @@ int  handle_pv_amp(void) {
     } else if (config.verbose)
       printf("PV Ampere: %.2f\n",(float)results.pvAmpere/100);
     return 0;
+}
+
+/*******************************************
+Function retry_send_receive - send data-request and receive respons, retry as necessary
+  bytes_send : amount of data to send (buffer in comms.snd_buf)
+  log_str : string to use for logging errors
+uses globals: comms
+returns: pointer directly after the copied bytes
+*******************************************/
+char *retry_send_receive(int bytes_send, char *log_str) {
+    int           bytes_read, cmd, data_chk, fcs_retry=4;
+    unsigned char *payload;
+
+    while(fcs_retry--) {
+        if(send_packet(comms.snd_buf, bytes_send)) {
+            /* Wait for the correct answer */
+            bytes_read = read_packet();
+            if(bytes_read > 0)  /* Data error, checksum or missing sync, force a retry */
+            payload = check_header(comms.rcv_buf, bytes_read);
+            cmd = get_header_cmd(comms.rcv_buf, bytes_read);
+            data_chk = payload[IDX_DATA_CHK];
+            if(cmd == CMD_DATA) {
+                if(data_chk==DATA_CHK)
+                    break;
+                else
+// TEMPORARY!!! Debug info
+printf("Invalid data_chk(%02x), retrying\n", data_chk);
+            }
+        }
+        else {
+            printf("Could not send data of %s\n", log_str);
+        }
+        sleep(3); /* Wait 3 seconds before trying again */
+    }
+    if (cmd != CMD_DATA || data_chk != DATA_CHK) {
+        printf("No valid response from %s\n", log_str);
+        return NULL;
+    }
+    return payload;
 }
 
 /*******************************************
@@ -1160,36 +1078,37 @@ int pack_smanet2_data(unsigned char *buf, int size, unsigned char *src, unsigned
 
 /*******************************************
 Function read_packet - Read a packet from BlueTooth, translating escape characters and checksum
-  buf       : buffer to be dumped in headecimal format
-  buf_size  : size of this buffer
-returns: Amount of bytes sent
+returns: Amount of bytes read, or -1 if an error occurs
 *******************************************/
-int read_packet(unsigned char *buf, int buf_size) {
-    int bytes_read, bytes_in_packet, i, som_found=0;
+int read_packet() {
+    int bytes_read, bytes_in_packet, i, sync_found=0;
     unsigned int fcs_checksum, msg_checksum;
     unsigned char *from, *src, *dest; /* Buffer pointers for translating data */
     packet_hdr *hdr;
 
-    bytes_read = read_bt(buf, buf_size);
+    bytes_read = read_bt(comms.rcv_buf, sizeof(comms.rcv_buf));
+/* TEMPORARY */
+memcpy(comms.rawrcv_buf, comms.rcv_buf, sizeof(comms.rawrcv_buf));
+comms.rawrcv_buf_size = bytes_read;
     bytes_in_packet = bytes_read;
-    hdr = (packet_hdr *)buf;
+    hdr = (packet_hdr *)comms.rcv_buf;
     /* If we received a data package (CMD 01), do some checking */
     if(hdr->cmd == CMD_DATA) {
-        if(buf[bytes_read-1] != 0x7e) {
+        if(comms.rcv_buf[bytes_read-1] != HDLC_SYNC) {
             printf("Invalid data message, missing 0x7e at end\n");
             return -1;
         }
         /* Find out where translation and checksumming should start */
-        from = buf + PKT_OFF_DATASTART;
-        while((*from != HDLC_SYNC) && (from < buf+bytes_read ))
+        from = comms.rcv_buf + PKT_OFF_DATASTART;
+        while((*from != HDLC_SYNC) && (from < comms.rcv_buf+bytes_read ))
           from++;
-        if(from < buf+bytes_read) {
+        if(from < comms.rcv_buf+bytes_read) {
             /* Skip the SYNC character itself */
             from++;
             /* Translate all escaped characters */
             src = from;
             dest = from;
-            while(src < buf+bytes_read) {
+            while(src < comms.rcv_buf+bytes_read) {
                 if( *src == HDLC_ESC ) {    /*Found escape character. Need to convert*/
                     src++;                  /* Skip the escape character */
                     *dest++ = *src++^0x20;  /* and Xor the following character with 0x020 */
@@ -1201,13 +1120,13 @@ int read_packet(unsigned char *buf, int buf_size) {
             /* Calculate the checksum */
             fcs_checksum = 0xffff;
             src = from;
-            while(src < buf+bytes_in_packet-3) {
+            while(src < comms.rcv_buf+bytes_in_packet-3) {
                 fcs_checksum = (fcs_checksum >> 8) ^ (fcstab[(fcs_checksum ^ *src++) & 0xff]);
             }
         }
         if( config.debug >= 3 )
-          dump_hex("Translated package", buf, bytes_in_packet);
-        msg_checksum = (buf[bytes_in_packet-2]<<8) + buf[bytes_in_packet-3];
+          dump_hex("Translated package", comms.rcv_buf, bytes_in_packet, 0);
+        msg_checksum = (comms.rcv_buf[bytes_in_packet-2]<<8) + comms.rcv_buf[bytes_in_packet-3];
         fcs_checksum = fcs_checksum ^ 0xffff;
         if(msg_checksum != fcs_checksum) {
             printf("Checksum failed: calculated %04x instead of %04x\n", fcs_checksum, msg_checksum);
@@ -1228,7 +1147,7 @@ int send_packet(unsigned char *buf, int len) {
     /* Fill in the length */
     hdr = (packet_hdr *)buf;
     hdr->len = len;
-    hdr->chksum = hdr->som ^ buf[PKT_OFF_LEN1] ^ buf[PKT_OFF_LEN2];
+    hdr->chksum = hdr->sync ^ buf[PKT_OFF_LEN1] ^ buf[PKT_OFF_LEN2];
     return write_bt(buf, len);
 }
 
@@ -1244,14 +1163,14 @@ unsigned char *check_header(unsigned char *buf, int len) {
     char addr[19] = { 0 };
 
     hdr = (packet_hdr *)buf;
-    if(hdr->som != HDLC_SYNC) {
+    if(hdr->sync != HDLC_SYNC) {
         if (config.verbose) {
-            printf("WARNING: Start Of Message is %02x instead of %02x\n", hdr->som, HDLC_SYNC);
+            printf("WARNING: Start Of Message is %02x instead of %02x\n", hdr->sync, HDLC_SYNC);
             printf("pkt  checksum: 0x%x, calc checksum: 0x%x\n", hdr->chksum, chksum);
         }
         return NULL; 
     }
-    chksum = hdr->som ^ buf[PKT_OFF_LEN1] ^ buf[PKT_OFF_LEN2];
+    chksum = hdr->sync ^ buf[PKT_OFF_LEN1] ^ buf[PKT_OFF_LEN2];
     if (hdr->chksum != chksum) {
         if (config.verbose) {
             printf("WARNING: checksum mismatch\n");
@@ -1291,7 +1210,7 @@ int create_header(int cmd, unsigned char *buf, int size) {
  
     comms.fcs_checksum = 0xffff;    /* Initialise a fresh checksum */
     hdr = (packet_hdr *) buf;
-    hdr->som    = HDLC_SYNC;
+    hdr->sync    = HDLC_SYNC;
     hdr->len    = 0;        /* Filled in later */
     hdr->chksum = 0;        /* Filled in later */
     hdr->cmd    = cmd;
@@ -1310,7 +1229,7 @@ returns: Amount of bytes sent
 int read_bt(unsigned char *buf, int buf_size) {
     int bytes_read;
     bytes_read = read(comms.sock, buf, buf_size);
-    dump_hex("reading", buf, bytes_read);
+    dump_hex("reading", buf, bytes_read, 0);
     return bytes_read;
 }
 
@@ -1322,7 +1241,7 @@ Function write_bt - Write a message to bluetooth
 int write_bt(unsigned char *buf, int length) {
   int written;
   written = write(comms.sock, buf, length);
-  dump_hex("writing", buf, length);
+  dump_hex("writing", buf, length, 0);
   return written;
 }
 
@@ -1331,10 +1250,11 @@ Function dump_hex - show a buffer in hexadecimal format, if the debug level is 2
   logstr    : Description of the buffer being dumped
   buf       : buffer to be dumped in headecimal format
   length    : length of the message
+  force     : force dumping, even if debug level is insufficient
 *******************************************/
-int dump_hex(char *logstr, unsigned char *buf, int length) {
+int dump_hex(char *logstr, unsigned char *buf, int length, int force) {
     int i;
-    if( config.debug >= 2 && length > 0 ) {
+    if( (force || config.debug >= 2) && length > 0 ) {
         printf( "\n%s: len=%d data=\n", logstr, length);
         for( i=0; i<length; i++ ) {
           if( i%16== 0 ) printf( "%s  %08x: ", (i>0 ? "\n" : ""), i);

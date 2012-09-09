@@ -89,7 +89,7 @@ Versions:
 
 Limitations: 
 ------------
-  - A Little-Endian processor is assumed, because data structure are built directly in memory (using structs).
+  - A Little-Endian processor is assumed, because data structures are built directly in memory (using structs).
     Don't worry, most Linux machines are Little Endian, at least the Intel and ARM processors.
   - Probably only works with SunnyBoy inverters with a piggyback BlueTooth module, not with the newer ones with built-in BT.
 
@@ -103,9 +103,6 @@ Technical notes:
     Therefore the BT communications is very reliable, chances of reading wrong values are very small.
   - I have chosen to communicate with small messages, rather than reading lots of data at once.
     This makes the communications more reliable too.
-  - The structure of this code is reasonable, but could be optimised. 
-    For instance I could have made a single function to send data and wait for the answer.
-    This is now implemented at multiple places.
   - This software uses global data, as it has a very specific use.
       - The config structure contains settings from the commandline.
       - The comms structure holds communications settings like addresses, and the send/receive buffers.

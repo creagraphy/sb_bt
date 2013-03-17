@@ -318,56 +318,61 @@ int main(int argc, char **argv) {
     char name[248] = { 0 };
     char *serial = NULL;
     char filename[256];
+    char command[256];
     time_t curtime;
     struct tm *lt;
     struct stat fileStat;
     FILE *file;
 
+    // Bluetooth might be hanging in a connection. Disconnect.
+    sprintf(command, "hcitool dc %s &> /dev/null", config.bt_address);
+    system (command);
+
     /* read the commandline arguments */
     for (i = 1; i < argc; i++) {
-      if(!strcmp(argv[i],"-a")) {
-        i++;
-        if (i<argc) {
-          strcpy(config.bt_address,argv[i]);
-        }
-      }
-      else if(!strcmp(argv[i],"-p")) {
-        i++;
-        if (i<argc) {
-          strcpy(config.password,argv[i]);
-        }
-      }
-      else if(!strcmp(argv[i],"-f")) {
-        i++;
-        if (i<argc) {
-          strcpy(config.out_file,argv[i]);
-        }
-      }
-      else if(!strcmp(argv[i],"-t")) {
-        config.set_time = 1;
-        if (i+1 < argc){           /* Note: this tests for the next argument (<= instead of <) */
-          if(isdigit(argv[i+1][0])) {
+        if(!strcmp(argv[i],"-a")) {
             i++;
-            config.set_time = atoi(argv[i]);
-          }
+            if (i<argc) {
+                strcpy(config.bt_address,argv[i]);
+            }
         }
-      }
-      else if(!strcmp(argv[i],"-v")) {
-        config.verbose = 1;
-      }
-      else if(!strcmp(argv[i],"-d")) {
-        config.debug = 1;
-        if (i+1 < argc){           /* Note: this tests for the next argument (<= instead of <) */
-          if(isdigit(argv[i+1][0])) {
+        else if(!strcmp(argv[i],"-p")) {
             i++;
-            config.debug = atoi(argv[i]);
-          }
+            if (i<argc) {
+                strcpy(config.password,argv[i]);
+            }
         }
-      }
-      else if(!strcmp(argv[i],"-h")) {
-        printf(help,argv[0]);
-        return 0;
-      }
+        else if(!strcmp(argv[i],"-f")) {
+            i++;
+            if (i<argc) {
+                strcpy(config.out_file,argv[i]);
+            }
+        }
+        else if(!strcmp(argv[i],"-t")) {
+            config.set_time = 1;
+            if (i+1 < argc){           /* Note: this tests for the next argument (<= instead of <) */
+                if(isdigit(argv[i+1][0])) {
+                    i++;
+                    config.set_time = atoi(argv[i]);
+                }
+            }
+        }
+        else if(!strcmp(argv[i],"-v")) {
+            config.verbose = 1;
+        }
+        else if(!strcmp(argv[i],"-d")) {
+            config.debug = 1;
+            if (i+1 < argc){           /* Note: this tests for the next argument (<= instead of <) */
+                if(isdigit(argv[i+1][0])) {
+                    i++;
+                    config.debug = atoi(argv[i]);
+                }
+            }
+        }
+        else if(!strcmp(argv[i],"-h")) {
+            printf(help,argv[0]);
+            return 0;
+        }
     }
 
     /* Check if this is a new day, by checking if the file with day-values exists */
@@ -391,10 +396,10 @@ int main(int argc, char **argv) {
 
     /* connect to server */
     if(comms.sock > 0)
-      status = connect(comms.sock, (struct sockaddr *)&comms.dst_addr, sizeof(comms.dst_addr));
+        status = connect(comms.sock, (struct sockaddr *)&comms.dst_addr, sizeof(comms.dst_addr));
     if(comms.sock > 0 && !status) {
         if(config.verbose)
-          printf("Connected to SunnyBeam with name: %s (Serial: %s)\n", name, serial);
+            printf("Connected to SunnyBeam with name: %s (Serial: %s)\n", name, serial);
         if(handle_init_1())
             return 1;
         if(handle_get_signal_strength())
@@ -420,9 +425,9 @@ int main(int argc, char **argv) {
             return 1;
         file = fopen(filename,"a+");
         if(new_file) {
-          fprintf(file,";Connected to SunnyBeam with name %s\n", name);
-          fprintf(file,";Serial: %s, Bluetooth signal strength: %d \%\n", serial, comms.signal);
-          fprintf(file,"DateTime;Total kWh;Current kW;Max kW today;Total SunHours;PV Volt;PV Ampere;Net freq;Net Volt;Sol Temp;Error\n");
+            fprintf(file,";Connected to SunnyBeam with name %s\n", name);
+            fprintf(file,";Serial: %s, Bluetooth signal strength: %d \%\n", serial, comms.signal);
+            fprintf(file,"DateTime;Total kWh;Current kW;Max kW today;Total SunHours;PV Volt;PV Ampere;Net freq;Net Volt;Sol Temp;Error\n");
         }
         curtime = time(NULL);
         lt = localtime (&curtime);
@@ -432,16 +437,13 @@ int main(int argc, char **argv) {
         fprintf(file, "%.2f;%.2f;;", (float)results.netFreq/100,(float)results.netVolt/100);
         fprintf(file, "\n");
         fclose(file); /*done!*/ 
-  }
-  else {
-      if (config.verbose)
-        printf("connection to SunnyBoy failed\n");
-        return 1;
+        /* close connection */
+        close(comms.sock);
+        return 0;
     }
-
-    /* close connection */
-    close(comms.sock);
-    return 0;
+    if (config.verbose)
+        printf("connection to SunnyBoy failed\n");
+    return 1;
 }
 
 
@@ -464,7 +466,7 @@ int handle_init_1(void) {
     else {
         if (config.verbose)
             printf("\nSend init 1: received invalid messages header\n");
-        return(1);
+        return 1;
     }
     if(config.debug >= 2)
         printf("\nSend init 1\n");
@@ -699,7 +701,7 @@ int  handle_total_wh(void) {
     memcpy(&results.datetime, &payload[IDX_DATETIME], 4);
     memcpy(&results.Wh, &payload[IDX_VALUE], 3);
 // TEMPORARY!!! Debug info
-if(results.Wh < 0 || results.Wh > 1000000) {  /* More than 1000 kWh is not realistic, currently */
+if(results.Wh < 0 || results.Wh > 100000000) {  /* More than 100000 kWh is not realistic, currently */
   printf(" Foute waarde voor Wh: %d\n",results.Wh);
   tm_time = localtime(&results.datetime);
   printf("gelezen datetime: %04d-%02d-%02d %02d:%02d:%02d (%x)\n",1900+tm_time->tm_year, tm_time->tm_mon,
@@ -958,8 +960,12 @@ uses globals: comms
 returns: pointer directly after the copied bytes
 *******************************************/
 char *retry_send_receive(int bytes_send, char *log_str) {
-    int           bytes_read, cmd, data_chk, fcs_retry=4;
+    int           bytes_read, cmd, data_chk, fcs_retry=10;
     unsigned char *payload;
+
+// TEMPORARY!!! Debug info
+time_t curtime;
+struct tm *lt;
 
     while(fcs_retry--) {
         if(send_packet(comms.snd_buf, bytes_send)) {
@@ -971,16 +977,19 @@ char *retry_send_receive(int bytes_send, char *log_str) {
             data_chk = payload[IDX_DATA_CHK];
             if(cmd == CMD_DATA) {
                 if(data_chk==DATA_CHK)
-                    break;
-                else
+                    break;  /* Retry */
+                else {
 // TEMPORARY!!! Debug info
-printf("Invalid data_chk(%02x), retrying\n", data_chk);
+curtime = time(NULL);
+lt = localtime (&curtime);
+printf("%02d:%02d:%02d : Invalid data_chk(%02x), retrying\n", lt->tm_hour, lt->tm_min, lt->tm_sec, data_chk);
+              }
             }
         }
         else {
             printf("Could not send data of %s\n", log_str);
         }
-        sleep(3); /* Wait 3 seconds before trying again */
+        sleep(5); /* Wait 5 seconds before trying again */
     }
     if (cmd != CMD_DATA || data_chk != DATA_CHK) {
         printf("No valid response from %s\n", log_str);
@@ -1165,18 +1174,18 @@ unsigned char *check_header(unsigned char *buf, int len) {
 
     hdr = (packet_hdr *)buf;
     if(hdr->sync != HDLC_SYNC) {
-        if (config.verbose) {
+//        if (config.verbose) {
             printf("WARNING: Start Of Message is %02x instead of %02x\n", hdr->sync, HDLC_SYNC);
             printf("pkt  checksum: 0x%x, calc checksum: 0x%x\n", hdr->chksum, chksum);
-        }
+//        }
         return NULL; 
     }
     chksum = hdr->sync ^ buf[PKT_OFF_LEN1] ^ buf[PKT_OFF_LEN2];
     if (hdr->chksum != chksum) {
-        if (config.verbose) {
+//        if (config.verbose) {
             printf("WARNING: checksum mismatch\n");
             printf("pkt  checksum: 0x%x, calc checksum: 0x%x\n", hdr->chksum, chksum);
-        }
+//        }
         return NULL; 
     }
     return buf + PKT_OFF_DATASTART;

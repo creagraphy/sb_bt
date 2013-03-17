@@ -83,6 +83,7 @@ Versions:
   - 0.9.3 : Remove unnecessary "secret inverter code"
   - 0.9.4 : Some improvements in the Readme file
   - 0.9.5 : Recognise if the SunnyBoy returns a status message instead of data, and retry (better implementation)
+  - 0.9.6 : Disconnect SunnyBoy to begin with, sometimes there seem to be hanging sessions
 
 
 
@@ -114,6 +115,14 @@ Technical notes:
     So if you want to use these functions in a multithreading program, or if you want to write a program 
     that communicates with more than one SunnyBoy, you will have to modify the code!
 
+
+
+Problems
+--------
+I sometimes experienced that the BT driver was not up and running, especially after a new Linux release.
+Some useful Linux commands in my case:
+- hciconfig hci0 up
+- hcitool scan
 
 
 

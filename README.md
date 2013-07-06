@@ -121,8 +121,10 @@ Problems
 --------
 I sometimes experienced that the BT driver was not up and running, especially after a new Linux release.
 Some useful Linux commands in my case:
+- hciconfig restart
 - hciconfig hci0 up
 - hcitool scan
+
 
 
 

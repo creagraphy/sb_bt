@@ -53,7 +53,7 @@ Versions:
 Limitations: 
 ------------
   - A Little-Endian processor is assumed, because data structure are built directly in memory (using structs).
-     Don't worry, most Linux machines are Little Endian, at least the Intel and ARM processors.
+     Don't worry, most Linux machines are Little Endian, at least the Intel and ARM processors do support it.
   - Probably only works with SunnyBoy inverters with a piggyback BlueTooth module, not with the newer ones with built-in BT.
 
 
@@ -88,7 +88,7 @@ Data package structure (example Wh data request):
 00000010:  01 00 7e ff 03 60 65 09 a0 ff ff ff ff ff ff 00
       Cmd2, Cmd1, Sync, dataheader (4b), C1, C2, ff (6x), A
 00000020:  00 ff ff ff ff ff ff 00 00 00 00 00 00 01 80 00
-      B, unknown (=6xff), 00 (4x), C, 00(4x), Counter, Rq1, Rq2
+      B, unknown (=6xff), 00, C, 00(4x), Counter, Rq1, Rq2
 00000030:  02 00 54 00 01 26 00 ff 01 26 00 4b 82 7e
       Rq3-Rq13, Chksum1, Chksum2, Sync
 
@@ -118,6 +118,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <unistd.h>
 #include <limits.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <bluetooth/bluetooth.h>
@@ -196,18 +197,15 @@ struct {
 
 /* Local storage Bluetooth information and buffers */
 struct {
-    int           sock;                  /* Socket with SunnyBoy */
-    struct        sockaddr_rc src_addr;  /* the local Bluetooth Addres in binary format  */
-    struct        sockaddr_rc dst_addr;  /* the remote Bluetooth Addres in binary format */
-    char          netid;                 /* The netid, part of the SMA messages */
-    int           signal;                /* Signal strength, max = 255 */
-    unsigned int  fcs_checksum;          /* Final checksum for messages */
-    unsigned char packet_send_counter;   /* Keeps track of the amount of data packages sent */
-    unsigned char snd_buf[1024];
-    unsigned char rcv_buf[1024];
-/* TEMPORARY */
-unsigned char rawrcv_buf[1024];
-unsigned int rawrcv_buf_size;
+    int                 sock;                  /* Socket with SunnyBoy */
+    struct sockaddr_rc  src_addr;              /* the local Bluetooth Addres in binary format  */
+    struct sockaddr_rc  dst_addr;              /* the remote Bluetooth Addres in binary format */
+    char                netid;                 /* The netid, part of the SMA messages */
+    int                 signal;                /* Signal strength, max = 255 */
+    unsigned int        fcs_checksum;          /* Final checksum for messages */
+    unsigned char       packet_send_counter;   /* Keeps track of the amount of data packages sent */
+    unsigned char       snd_buf[1024];
+    unsigned char       rcv_buf[1024];
 } comms = { 0, {0}, {0}, 1, 0, 0xffff, 0, {0}, {0} };
 
 /* Local storage for Sunnyboy output */
@@ -323,10 +321,7 @@ int main(int argc, char **argv) {
     struct tm *lt;
     struct stat fileStat;
     FILE *file;
-
-    // Bluetooth might be hanging in a connection. Disconnect.
-    sprintf(command, "hcitool dc %s &> /dev/null", config.bt_address);
-    system (command);
+    int devNull; 
 
     /* read the commandline arguments */
     for (i = 1; i < argc; i++) {
@@ -374,7 +369,21 @@ int main(int argc, char **argv) {
             return 0;
         }
     }
-
+    /* Bluetooth might be hanging in a connection. Disconnect. */
+    /* And send the output to /dev/null, unless verbose */
+    if(fork() == 0) {
+        if(config.verbose) {
+            printf("Disconnecting any previous bluetooth session: ");
+            fflush(stdout);
+        }
+        else {
+            devNull = open("/dev/null", O_WRONLY);
+            dup2(devNull,1);  /* Send stdout to /dev/null */
+            dup2(devNull,2);  /* Send stderr to /dev/null */
+            close (devNull);
+        }
+        execlp("hcitool", "hcitool", "dc", config.bt_address, NULL);
+    }
     /* Check if this is a new day, by checking if the file with day-values exists */
     /* Create the filename by adding the date to the base-name */
     curtime = time(NULL);
@@ -423,14 +432,12 @@ int main(int argc, char **argv) {
             return 1;
         if(handle_pv_amp())
             return 1;
-        file = fopen(filename,"a+");
+        file = fopen(filename,"a");
         if(new_file) {
             fprintf(file,";Connected to SunnyBeam with name %s\n", name);
             fprintf(file,";Serial: %s, Bluetooth signal strength: %d \%\n", serial, comms.signal);
             fprintf(file,"DateTime;Total kWh;Current kW;Max kW today;Total SunHours;PV Volt;PV Ampere;Net freq;Net Volt;Sol Temp;Error\n");
         }
-        curtime = time(NULL);
-        lt = localtime (&curtime);
         fprintf(file, "%02d-%02d-%04d %02d:%02d:%02d;",lt->tm_mday, 1+lt->tm_mon, 1900+lt->tm_year, lt->tm_hour, lt->tm_min, lt->tm_sec);
         fprintf(file, "%.3f;%.3f;",(float)results.Wh/1000, (float)results.W/1000);
         fprintf(file, ";;%.2f;%.3f;", (float)results.pvVolt/100,(float)results.pvAmpere/1000);
@@ -453,6 +460,7 @@ Globals: comms structure
 returns: 0 if succesfull
 *******************************************/
 int handle_init_1(void) {
+
     unsigned char *p = comms.snd_buf;
     int len, bytes_read, cmd, size=sizeof(comms.snd_buf);
     unsigned char *payload;
@@ -464,9 +472,9 @@ int handle_init_1(void) {
       comms.netid = payload[IDX_NETID];          
     }
     else {
-        if (config.verbose)
-            printf("\nSend init 1: received invalid messages header\n");
-        return 1;
+      if (config.verbose)
+        printf("\nSend init 1: received invalid message header\n");
+      return 1;
     }
     if(config.debug >= 2)
         printf("\nSend init 1\n");
@@ -521,8 +529,10 @@ int handle_get_signal_strength(void) {
         /* Wait for the correct answer */
         while(bytes_read = read_bt(comms.rcv_buf, sizeof(comms.rcv_buf))) {
             cmd = get_header_cmd(comms.rcv_buf, bytes_read);
-            if(cmd == CMD_BT_SIGNAL_RSP)
+            if(cmd == CMD_BT_SIGNAL_RSP) {
+                payload = check_header(comms.rcv_buf, bytes_read);
                 break;
+            }
         }
         if (cmd != CMD_BT_SIGNAL_RSP) {
             printf("No valid response from handle_get_signal_strength\n");
@@ -700,16 +710,6 @@ int  handle_total_wh(void) {
     /* get the WattHour from this message */
     memcpy(&results.datetime, &payload[IDX_DATETIME], 4);
     memcpy(&results.Wh, &payload[IDX_VALUE], 3);
-// TEMPORARY!!! Debug info
-if(results.Wh < 0 || results.Wh > 100000000) {  /* More than 100000 kWh is not realistic, currently */
-  printf(" Foute waarde voor Wh: %d\n",results.Wh);
-  tm_time = localtime(&results.datetime);
-  printf("gelezen datetime: %04d-%02d-%02d %02d:%02d:%02d (%x)\n",1900+tm_time->tm_year, tm_time->tm_mon,
-  tm_time->tm_mday, tm_time->tm_hour, tm_time->tm_min, tm_time->tm_sec, results.datetime);
-  dump_hex("Sent package", comms.snd_buf, p - comms.snd_buf, 1);
-  dump_hex("Received package", comms.rawrcv_buf, comms.rawrcv_buf_size, 1);
-  return -1;
-}
     if(config.debug) {
       printf("Total Wh: %lu ( %x )\n",results.Wh, results.Wh);
       tm_time = localtime(&results.datetime);
@@ -747,16 +747,6 @@ int  handle_cur_w(void) {
     /* get the Watt from this message */
     memcpy(&results.datetime, &payload[IDX_DATETIME], 4);
     memcpy(&results.W, &payload[IDX_VALUE], 3);
-// TEMPORARY!!! Debug info
-if(results.W < 0 || results.W > 10000) {  /* More than 10 kW is not realistic currently */
-  printf(" Foute waarde voor W: %d\n",results.Wh);
-  tm_time = localtime(&results.datetime);
-  printf("gelezen datetime: %04d-%02d-%02d %02d:%02d:%02d (%x)\n",1900+tm_time->tm_year, tm_time->tm_mon,
-  tm_time->tm_mday, tm_time->tm_hour, tm_time->tm_min, tm_time->tm_sec, results.datetime);
-  dump_hex("Sent package", comms.snd_buf, p - comms.snd_buf, 1);
-  dump_hex("Received package", comms.rawrcv_buf, comms.rawrcv_buf_size, 1);
-  return -1;
-}
     if(config.debug) {
       printf("Current Watt: %lu ( %x )\n",results.W, results.W);
       tm_time = localtime(&results.datetime);
@@ -963,27 +953,18 @@ char *retry_send_receive(int bytes_send, char *log_str) {
     int           bytes_read, cmd, data_chk, fcs_retry=10;
     unsigned char *payload;
 
-// TEMPORARY!!! Debug info
-time_t curtime;
-struct tm *lt;
-
     while(fcs_retry--) {
         if(send_packet(comms.snd_buf, bytes_send)) {
             /* Wait for the correct answer */
             bytes_read = read_packet();
-            if(bytes_read > 0)  /* Data error, checksum or missing sync, force a retry */
-            payload = check_header(comms.rcv_buf, bytes_read);
-            cmd = get_header_cmd(comms.rcv_buf, bytes_read);
-            data_chk = payload[IDX_DATA_CHK];
-            if(cmd == CMD_DATA) {
-                if(data_chk==DATA_CHK)
-                    break;  /* Retry */
-                else {
-// TEMPORARY!!! Debug info
-curtime = time(NULL);
-lt = localtime (&curtime);
-printf("%02d:%02d:%02d : Invalid data_chk(%02x), retrying\n", lt->tm_hour, lt->tm_min, lt->tm_sec, data_chk);
-              }
+            if(bytes_read > 0) {  /* Data error, checksum or missing sync, force a retry */
+                payload = check_header(comms.rcv_buf, bytes_read);
+                cmd = get_header_cmd(comms.rcv_buf, bytes_read);
+                data_chk = payload[IDX_DATA_CHK];
+                if(cmd == CMD_DATA) {
+                    if(data_chk==DATA_CHK)
+                        break;  /* Retry */
+                }
             }
         }
         else {
@@ -1066,6 +1047,8 @@ int add_fcs_checksum(unsigned char *buf, int size) {
 
 /*******************************************
 Function pack_smanet2_data - Pack a smanet 2 message, translating bytes as necessary
+                             This function also calculates the checksum, so all data
+                             that should be "checksummed" must pass this function
   buf   : destination buffer
   size  : size of the buffer.
   src   : source buffer
@@ -1097,9 +1080,6 @@ int read_packet() {
     packet_hdr *hdr;
 
     bytes_read = read_bt(comms.rcv_buf, sizeof(comms.rcv_buf));
-/* TEMPORARY */
-memcpy(comms.rawrcv_buf, comms.rcv_buf, sizeof(comms.rawrcv_buf));
-comms.rawrcv_buf_size = bytes_read;
     bytes_in_packet = bytes_read;
     hdr = (packet_hdr *)comms.rcv_buf;
     /* If we received a data package (CMD 01), do some checking */
@@ -1174,19 +1154,15 @@ unsigned char *check_header(unsigned char *buf, int len) {
 
     hdr = (packet_hdr *)buf;
     if(hdr->sync != HDLC_SYNC) {
-//        if (config.verbose) {
-            printf("WARNING: Start Of Message is %02x instead of %02x\n", hdr->sync, HDLC_SYNC);
-            printf("pkt  checksum: 0x%x, calc checksum: 0x%x\n", hdr->chksum, chksum);
-//        }
-        return NULL; 
+      printf("WARNING: Start Of Message is %02x instead of %02x\n", hdr->sync, HDLC_SYNC);
+      printf("pkt  checksum: 0x%x, calc checksum: 0x%x\n", hdr->chksum, chksum);
+      return NULL; 
     }
     chksum = hdr->sync ^ buf[PKT_OFF_LEN1] ^ buf[PKT_OFF_LEN2];
     if (hdr->chksum != chksum) {
-//        if (config.verbose) {
-            printf("WARNING: checksum mismatch\n");
-            printf("pkt  checksum: 0x%x, calc checksum: 0x%x\n", hdr->chksum, chksum);
-//        }
-        return NULL; 
+      printf("WARNING: checksum mismatch\n");
+      printf("pkt  checksum: 0x%x, calc checksum: 0x%x\n", hdr->chksum, chksum);
+      return NULL; 
     }
     return buf + PKT_OFF_DATASTART;
 }

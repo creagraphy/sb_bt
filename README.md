@@ -84,6 +84,7 @@ Versions:
   - 0.9.4 : Some improvements in the Readme file
   - 0.9.5 : Recognise if the SunnyBoy returns a status message instead of data, and retry (better implementation)
   - 0.9.6 : Disconnect SunnyBoy to begin with, sometimes there seem to be hanging sessions
+  - 0.9.7 : Bugsolve, and better implementation for disconnecting the SunnyBoy. Debug code removed.
 
 
 

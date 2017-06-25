@@ -48,7 +48,7 @@ Versions:
   - 0.9.3 : Remove unnecessary "secret inverter code"
   - 0.9.4 : Some improvements in the Readme file
   - 0.9.5 : Recognise if the SunnyBoy returns a status message instead of data, and retry (better implementation)
-
+  - 0.9.6 : Fix multiplier on PV Ampere result - reported value was previously 10x actual value
 
 Limitations: 
 ------------

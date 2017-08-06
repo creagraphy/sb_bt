@@ -29,7 +29,7 @@ I use this software by calling it from Cron, every 5 minutes.
 I use a separate script to upload The resulting CSV file to my webserver, that will add the data to a Mysql DB.  
 This is done by the upload.sh script (see below), which is too specific to add it to this repo.
 
-To see the resulting graphs: http://www.web-op-maat.nl/grafieken (Dutch page)
+To see the resulting graphs: https://creagraphy.nl/grafieken (Dutch page)
 
 Add in /etc/crontab:
 
@@ -85,7 +85,8 @@ Versions:
   - 0.9.5 : Recognise if the SunnyBoy returns a status message instead of data, and retry (better implementation)
   - 0.9.6 : Disconnect SunnyBoy to begin with, sometimes there seem to be hanging sessions
   - 0.9.7 : Bugsolve, and better implementation for disconnecting the SunnyBoy. Debug code removed.
-
+  - 0.9.8 : (Nick Prater) Fix multiplier on PV Ampere result - reported value was previously 10x actual value
+  - 0.9.9 : Fix versions (description was outdated), and some minor changes in README.md
 
 
 

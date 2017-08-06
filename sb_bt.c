@@ -48,7 +48,7 @@ Versions:
   - 0.9.3 : Remove unnecessary "secret inverter code"
   - 0.9.4 : Some improvements in the Readme file
   - 0.9.5 : Recognise if the SunnyBoy returns a status message instead of data, and retry (better implementation)
-
+  - 0.9.6 : Fix multiplier on PV Ampere result - reported value was previously 10x actual value
 
 Limitations: 
 ------------
@@ -938,7 +938,7 @@ int  handle_pv_amp(void) {
       printf("datetime: %04d-%02d-%02d %02d:%02d:%02d (%x)\n",1900+tm_time->tm_year, tm_time->tm_mon,
                tm_time->tm_mday, tm_time->tm_hour, tm_time->tm_min, tm_time->tm_sec, results.datetime);
     } else if (config.verbose)
-      printf("PV Ampere: %.2f\n",(float)results.pvAmpere/100);
+      printf("PV Ampere: %.2f\n",(float)results.pvAmpere/1000);
     return 0;
 }
 

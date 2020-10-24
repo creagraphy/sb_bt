@@ -117,6 +117,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <ctype.h>
 #include <time.h>
 #include <unistd.h>
 #include <limits.h>
@@ -127,6 +129,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/rfcomm.h>
 #include <bluetooth/hci.h>
+#include <bluetooth/hci_lib.h>
 
 /* Our private functions */
 char *strrstr(char *s1, char *s2);
@@ -143,6 +146,7 @@ int pack_smanet2_data(unsigned char *buf, int size, unsigned char *src, unsigned
 int handle_init_1(void);
 int handle_get_signal_strength(void);
 int handle_total_wh(void);
+int handle_cur_w(void);
 int handle_net_voltage(void);
 int handle_net_amp(void);
 int handle_net_freq(void);

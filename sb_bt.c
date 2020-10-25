@@ -568,7 +568,6 @@ int handle_logon(void) {
     char          code;
     unsigned char *payload;
     time_t        cur_time;
-
     if(config.debug >= 2)
         printf("\nSend Logon\n");
     len = create_header(CMD_DATA, p, size);
@@ -578,8 +577,10 @@ int handle_logon(void) {
     len = pack_smanet2_data(p, size, smanet2logon, sizeof(smanet2logon));
     p += len; size -= len;
     cur_time = time(NULL);
-    /* Add it three times to the buffer */
-    len = pack_smanet2_data(p, size, (unsigned char *)&cur_time, sizeof(cur_time));
+    /* Add it to the buffer */
+    /* len = pack_smanet2_data(p, size, (unsigned char *)&cur_time, sizeof(cur_time)); */
+    /* NOTE: sizeof(time_t) varies on different machines. So force using 4 bytes!) */
+    len = pack_smanet2_data(p, size, (unsigned char *)&cur_time, 4);
     p += len; size -= len;
     len = pack_smanet2_data(p, size, fourzeros, sizeof(fourzeros));
     p += len; size -= len;

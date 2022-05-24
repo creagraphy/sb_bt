@@ -717,7 +717,7 @@ int  handle_total_wh(void) {
       return -1;
     /* get the WattHour from this message */
     memcpy(&results.datetime, &payload[IDX_DATETIME], 4);
-    memcpy(&results.Wh, &payload[IDX_VALUE], 3);
+    memcpy(&results.Wh, &payload[IDX_VALUE], 4);
     if(config.debug) {
       printf("Total Wh: %lu ( %x )\n",results.Wh, results.Wh);
       tm_time = localtime(&results.datetime);
@@ -754,7 +754,7 @@ int  handle_cur_w(void) {
       return -1;
     /* get the Watt from this message */
     memcpy(&results.datetime, &payload[IDX_DATETIME], 4);
-    memcpy(&results.W, &payload[IDX_VALUE], 3);
+    memcpy(&results.W, &payload[IDX_VALUE], 4);
     if(config.debug) {
       printf("Current Watt: %lu ( %x )\n",results.W, results.W);
       tm_time = localtime(&results.datetime);
@@ -791,7 +791,7 @@ int  handle_net_voltage(void) {
       return -1;
     /* get the Volt from this message */
     memcpy(&results.datetime, &payload[IDX_DATETIME], 4);
-    memcpy(&results.netVolt, &payload[IDX_VALUE], 3);
+    memcpy(&results.netVolt, &payload[IDX_VALUE], 4);
     if(config.debug) {
       printf("Net Volt: %.2f ( %x )\n",(float)results.netVolt/100, results.netVolt);
       tm_time = localtime(&results.datetime);
@@ -828,7 +828,7 @@ int  handle_net_amp(void) {
       return -1;
     /* get the Ampere from this message */
     memcpy(&results.datetime, &payload[IDX_DATETIME], 4);
-    memcpy(&results.netAmpere, &payload[IDX_VALUE], 3);
+    memcpy(&results.netAmpere, &payload[IDX_VALUE], 4);
     if(config.debug) {
       printf("Net milli-Ampere: %lu ( %x )\n",results.netAmpere, results.netAmpere);
       tm_time = localtime(&results.datetime);
@@ -865,7 +865,7 @@ int  handle_net_freq(void) {
       return -1;
     /* get the Freq from this message */
     memcpy(&results.datetime, &payload[IDX_DATETIME], 4);
-    memcpy(&results.netFreq, &payload[IDX_VALUE], 3);
+    memcpy(&results.netFreq, &payload[IDX_VALUE], 4);
     if(config.debug) {
       printf("Net Freq: %.2f ( %x )\n",(float)results.netFreq/100, results.netFreq);
       tm_time = localtime(&results.datetime);
@@ -902,7 +902,7 @@ int  handle_pv_volt(void) {
       return -1;
     /* get the Volt from this message */
     memcpy(&results.datetime, &payload[IDX_DATETIME], 4);
-    memcpy(&results.pvVolt, &payload[IDX_VALUE], 3);
+    memcpy(&results.pvVolt, &payload[IDX_VALUE], 4);
     if(config.debug) {
       printf("PV Volt: %.2f ( %x )\n",(float)results.pvVolt/100, results.pvVolt);
       tm_time = localtime(&results.datetime);
@@ -939,7 +939,7 @@ int  handle_pv_amp(void) {
       return -1;
     /* get the Ampere from this message */
     memcpy(&results.datetime, &payload[IDX_DATETIME], 4);
-    memcpy(&results.pvAmpere, &payload[IDX_VALUE], 3);
+    memcpy(&results.pvAmpere, &payload[IDX_VALUE], 4);
     if(config.debug) {
       printf("PV milli-Ampere: %lu ( %x )\n",results.pvAmpere, results.pvAmpere);
       tm_time = localtime(&results.datetime);

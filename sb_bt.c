@@ -113,7 +113,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-/* compile: gcc -lbluetooth -lm -o sb_bt sb_bt.c */
+/* compile: gcc -o sb_bt sb_bt.c -lbluetooth -lm */
 
 
 #include <stdio.h>
